@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lamas vs Bananas TD</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            background-color: #d7f5d1;
+        }
+
+        .tower-buttons {
+            position: fixed;
+            top: 10px;
+            left: 50px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tower-button {
+            padding: 10px;
+            background-color: #ccc;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .tower-button:hover {
+            background-color: #aaa;
+        }
+
+        .stats {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="tower-buttons">
+        <button class="tower-button" onclick="setSelectedTower('minigun')">Minigun</button>
+        <button class="tower-button" onclick="setSelectedTower('freeze')">Freeze Ray</button>
+        <button class="tower-button" onclick="setSelectedTower('standard')">Base Tower</button>
+    </div>
+
+    <div class="stats">
+        <div id="money-counter">Money: $500</div>
+        <div id="kill-counter">Kills: 0</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let selectedTower = 'standard'; // Default selected tower
+        const towers = [];
+        const enemies = [];
+        let gameOver = false;
+        let money = 500;
+        let killCount = 0; // Counter for total kills
+
+        // Tower class
+        class Tower {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.range = 100;
+                this.cooldown = 0;
+                this.type = type;
+            }
+
+            draw() {
+                if (this.type === 'minigun') {
+                    ctx.fillStyle = 'gray';
+                    ctx.fillRect(this.x - 20, this.y - 20, 40, 40);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '18px Arial';
+                    ctx.fillText('MG', this.x - 10, this.y + 7);
+                } else if (this.type === 'freeze') {
+                    ctx.fillStyle = 'lightblue';
+                    ctx.fillRect(this.x - 20, this.y - 20, 40, 40);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '18px Arial';
+                    ctx.fillText('FR', this.x - 10, this.y + 7);
+                } else {
+                    ctx.fillStyle = 'brown';
+                    ctx.fillRect(this.x - 20, this.y - 20, 40, 40);
+                    ctx.fillStyle = 'white';
+                    ctx.font = '18px Arial';
+                    ctx.fillText('L', this.x - 7, this.y + 7);
+                }
+            }
+
+            update() {
+                if (this.cooldown > 0) this.cooldown--;
+                else {
+                    for (let enemy of enemies) {
+                        const dx = enemy.x - this.x;
+                        const dy = enemy.y - this.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < this.range) {
+                            this.shoot(enemy);
+                            this.cooldown = 10; // Faster cooldown
+                            break;
+                        }
+                    }
+                }
+            }
+
+            shoot(target) {
+                if (this.type === 'minigun') {
+                    target.health -= 5; // Minigun does less damage per shot
+                } else if (this.type === 'freeze') {
+                    target.speed = 0.5; // Freeze ray slows down the enemy
+                } else {
+                    target.health -= 10; // Base tower damage
+                }
+
+                if (target.health <= 0) {
+                    killCount++;
+                    if (target.type === 'blue') {
+                        money += 70; // Reward for killing blue enemy
+                    } else if (target.type === 'red') {
+                        money += 300; // Reward for killing red enemy
+                    }
+                    const index = enemies.indexOf(target);
+                    enemies.splice(index, 1);
+
+                    // Update counters
+                    document.getElementById('money-counter').textContent = 'Money: $' + money;
+                    document.getElementById('kill-counter').textContent = 'Kills: ' + killCount;
+
+                    // Spawn a red enemy every 100 kills
+                    if (killCount % 100 === 0) {
+                        spawnRedEnemy();
+                    }
+                }
+            }
+        }
+
+        // Enemy class
+        class Enemy {
+            constructor(x, y, health, speed, type) {
+                this.x = x;
+                this.y = y;
+                this.health = health;
+                this.speed = speed;
+                this.width = 20;
+                this.height = 20;
+                this.type = type;
+            }
+
+            draw() {
+                if (this.type === 'blue') {
+                    ctx.fillStyle = 'blue';
+                } else if (this.type === 'red') {
+                    ctx.fillStyle = 'red';
+                } else {
+                    ctx.fillStyle = 'yellow';
+                }
+
+                ctx.beginPath();
+                ctx.ellipse(this.x, this.y, this.width / 2, this.height / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'black';
+                ctx.stroke();
+            }
+
+            update() {
+                this.x += this.speed;
+                if (this.x > canvas.width) {
+                    gameOver = true;
+                }
+            }
+        }
+
+        function setSelectedTower(type) {
+            selectedTower = type;
+        }
+
+        function placeTower(x, y) {
+            if (money >= 100) {
+                money -= 100;
+                towers.push(new Tower(x, y, selectedTower));
+            } else {
+                alert('Not enough money to place tower!');
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            placeTower(mouseX, mouseY);
+        });
+
+        function gameLoop() {
+            if (gameOver) {
+                ctx.fillStyle = 'red';
+                ctx.font = '48px Arial';
+                ctx.fillText('Game Over', canvas.width / 2 - 120, canvas.height / 2);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let tower of towers) {
+                tower.update();
+                tower.draw();
+            }
+
+            for (let enemy of enemies) {
+                enemy.update();
+                enemy.draw();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function spawnBlueEnemy() {
+            enemies.push(new Enemy(0, Math.random() * canvas.height, 50, 2, 'blue'));
+        }
+
+        function spawnRedEnemy() {
+            enemies.push(new Enemy(0, Math.random() * canvas.height, 100, 1, 'red'));
+        }
+
+        setInterval(() => {
+            if (!gameOver) {
+                spawnBlueEnemy();
+            }
+        }, 2000);
+
+        gameLoop();
+  </script>
+</body>
+</html>
